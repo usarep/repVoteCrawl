@@ -321,6 +321,10 @@ public class HouseBillsPageCrawler
     		if (StrUtil.isEmpty(e.billUrl))
     			continue;
     		
+    		// if url starts with _EMPTY_
+    		if (e.billUrl.startsWith("_EMPTY_"))
+    			continue;
+    		
     		/*
     		 * has this bill url already been processed ?
     		 */

@@ -232,9 +232,16 @@ public class OneBillPageCrawler
     	PreparedStatement pstmt3 = null;
     	
     	/*
-    	 update bill set crs_summary=?, crs_summary_url=?, index_terms_url=? where id=?
+    	 * 11/14/14
+    	 * added csv_crs_index_terms to bill
+    	 * this simplifies loading solr 
+    	 * the separator is a colon because data may have commas
     	 */
-    	String sql = "update bill set crs_summary=?, crs_summary_url=?, index_terms_url=? where id=? " ;
+    	
+    	/*
+    	 update bill set crs_summary=?, crs_summary_url=?, index_terms_url=? , csv_crs_index_terms=? where id=?
+    	 */
+    	String sql = "update bill set crs_summary=?, crs_summary_url=?, index_terms_url=?, csv_crs_index_terms=? where id=? " ;
     	
     	/*
     	 insert into vote_meta_small 
@@ -265,6 +272,7 @@ public class OneBillPageCrawler
     		BaseDbUtils.o.setString(pstmt, b.crsSummary, i++);
     		BaseDbUtils.o.setString(pstmt, b.crsHref, i++);
     		BaseDbUtils.o.setString(pstmt, b.indexTermsHref, i++);
+    		BaseDbUtils.o.setString(pstmt, b.getCsvIndexTerms(), i++);
     		
     		pstmt.setInt(i++, b.id.intValue());
     		pstmt.executeUpdate();

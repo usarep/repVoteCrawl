@@ -21,6 +21,8 @@ public class Arguments
 	
 	int year;
 	
+	int startRollCallNum; // optional. if > 0, start with this as the min roll call number
+	
 	
 	private boolean error = false;
 	
@@ -58,6 +60,13 @@ public class Arguments
         		continue;
         	}
         	
+        	if (nextArg.startsWith("-s")) {
+        		match = true;
+        		result.startRollCallNum = Integer.parseInt(args[index+1]);
+        		index+=2;
+        		continue;
+        	}
+        	
         	
 
         	if (!match) {
@@ -76,7 +85,7 @@ public class Arguments
     private void usage() 
     {
     	error = true;
-    	System.out.println("Usage: java mainClass [-u url] [-y year]  ");
+    	System.out.println("Usage: java mainClass [-u url] [-y year] [-s startRollCallNum] ");
     }
     
     private void usage(String s) {

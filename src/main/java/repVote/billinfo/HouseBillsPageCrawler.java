@@ -40,7 +40,7 @@ public class HouseBillsPageCrawler
     	{
     		Arguments arguments = Arguments.newInstance(args);
     		
-    		o.execute(arguments.url, arguments.year);
+    		o.execute(arguments.url, arguments.year, arguments.startRollCallNum);
     		
         
     	} catch (Exception e) {
@@ -49,7 +49,7 @@ public class HouseBillsPageCrawler
     	}
     }
     
-    public void execute (String url, int year)
+    public void execute (String url, int year, int startRollCallNum)
     {
     	try
     	{
@@ -71,6 +71,8 @@ public class HouseBillsPageCrawler
 	    	
 	    	params.congress =  (params.year - 1787)/2 ; // 113;
 	    	
+	    	params.startRollCallNum = startRollCallNum;
+	    	
 	        // The Firefox driver supports javascript 
 	        WebDriver driver = new FirefoxDriver();
 	        
@@ -91,6 +93,8 @@ public class HouseBillsPageCrawler
     	String session; // 1st or 2nd
     	String chamber = "U.S. House of Representatives";
     	int congress; // 113 etc
+    	
+    	int startRollCallNum; // if > 0, start with this as the min roll call number; earlier values have been processed
     }
     
     public void execute(WebDriver driver, Params params) throws Exception 
@@ -157,6 +161,9 @@ public class HouseBillsPageCrawler
         		} catch (NumberFormatException e) { b.rollCallNum = 0; }
         		
         		if (b.rollCallNum <= 0)
+        			continue;
+        		
+        		if (params.startRollCallNum > 0 && b.rollCallNum < params.startRollCallNum)
         			continue;
         		
         		b.params = params;

@@ -13,6 +13,9 @@ public class BillRollCall
 	int rollCallNum;
 	String billUrl;
 	String billUrlText;
+	String docTitle;
+	
+	
 	Params params;
 	
 	String crsHref;
@@ -50,6 +53,43 @@ public class BillRollCall
 		
 	}
 	
+	/*
+	 * H. R. 1234 
+	 * 
+	 * docType = H R
+	 * docNumber = 1234
+	 */
+	
+	
+	public Integer getDocNumber()
+	{
+		if (StrUtil.isEmpty(billUrlText))
+			return null;
+		
+		Integer result = null;
+		String s= billUrlText.replaceAll("[^\\d]+", " ").trim();
+		if (!StrUtil.isEmpty(s))
+		{
+			try {
+				int docNum = Integer.parseInt(s);
+				result = new Integer(docNum);
+			} catch (NumberFormatException e) {}
+		}
+		
+		return result;
+	}
+	
+	public String getDocType()
+	{
+		if (StrUtil.isEmpty(billUrlText))
+			return null;
+		
+		String type = billUrlText.replaceAll("\\W+", " ").replaceAll("\\d", "").trim();
+		
+		return type;
+		
+		
+	}
 	
 	
 }

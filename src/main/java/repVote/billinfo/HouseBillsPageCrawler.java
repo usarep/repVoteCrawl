@@ -91,6 +91,7 @@ public class HouseBillsPageCrawler
     	String url;
     	int year;
     	String session; // 1st or 2nd
+    	int chamberId = 1; // US House == 1, US Senate == 2
     	String chamber = "U.S. House of Representatives";
     	int congress; // 113 etc
     	
@@ -214,12 +215,13 @@ public class HouseBillsPageCrawler
     	
     	/*
     	 url is a unique key
+    	 doc_type, doc_number are also unique key
     	 
-    	 insert into bill (name, url) values (?,?)
-    	 on duplicate key update id = last_insert_id(id), name=values(name);
+    	 insert into bill (doc_type, doc_number, name, url, doc_title) values (?,?,?,?,?)
+    	 on duplicate key update id = last_insert_id(id), name=values(name), doc_title=values(doc_title);
     	 */
-    	String sql = "insert into bill (name, url) values (?,?) "
-    	 + " on duplicate key update id = last_insert_id(id), name=values(name); ";
+    	String sql = "insert into bill (doc_type, doc_number, name, url, doc_title) values (?,?,?,?,?) "
+    	 + " on duplicate key update id = last_insert_id(id), name=values(name), doc_title=values(doc_title); ";
     	
     	/*
     	 insert into vote_meta_small 
@@ -229,8 +231,8 @@ public class HouseBillsPageCrawler
     	 
     	 */
     	String sqlVoteMetaSmall = "insert into vote_meta_small "
-    	 	 + " (bill_id, roll_call_num, congress, year, session, chamber) "
-    	 	 + " values (?,?,?,?,?,?) "
+    	 	 + " (bill_id, roll_call_num, congress, year, session, chamber_id, chamber) "
+    	 	 + " values (?,?,?,?,?,?,?) "
     	 	 + " on duplicate key update id=last_insert_id(id); ";
     	
     	int numSaved = 0;
@@ -248,8 +250,24 @@ public class HouseBillsPageCrawler
     		{
     			pstmt.clearParameters();
     			int i = 1;
+    			
+    			Integer docNumber = e.getDocNumber();
+    			String docType = e.getDocType();
+    			
+    			/*
+    			 * (docNumber, docType) are unique key, if they are null, we cannot use this record
+    			 */
+    			if (docNumber == null || StrUtil.isEmpty(docType))
+    			{
+    				logger.error("docNumber=" + docNumber + ", docType=" + docType + ", should be non empty. skipping");
+    				continue;
+    				
+    			}
+    			pstmt.setString(i++, docType);
+    			pstmt.setInt(i++, docNumber);
     			BaseDbUtils.o.setString(pstmt, e.billUrlText, i++);
     			pstmt.setString(i++, e.billUrl);
+    			BaseDbUtils.o.setString(pstmt, e.docTitle, i++);
     			
     			ResultWithKey wrappedId = ExecuteWithReturnKey.o.executeUpdate(pstmt);
     			if (wrappedId != null && wrappedId.getGeneratedKey() != null)
@@ -266,6 +284,10 @@ public class HouseBillsPageCrawler
     				pstmt2.setInt(k++, e.params.congress);
     				pstmt2.setInt(k++, e.params.year);
     				pstmt2.setString(k++, e.params.session);
+    				
+    				
+    				pstmt.setInt(i++, e.params.chamberId);
+    				
     				pstmt2.setString(k++, e.params.chamber);
     				pstmt2.executeUpdate();
     			}

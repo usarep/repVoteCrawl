@@ -8,6 +8,11 @@ public class Link implements Comparable
 	String url;
 	String text;
 	
+	// for index terms, the first link amongst the list of subjects seems to be the most important.
+	public static enum Importance {NULL, LOW, NORMAL, HIGH };
+	Importance importance;
+	
+	
 	public boolean isEqual(Object other)
 	{
 		Link o = (Link) other;
@@ -53,4 +58,6 @@ public class Link implements Comparable
 			return url.trim().compareToIgnoreCase(o.url.trim());
 		
 	}
+	
+	
 }

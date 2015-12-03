@@ -15,8 +15,8 @@ import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.firefox.FirefoxDriver;
 
+import repVote.billinfo.Link.Importance;
 import repVote.db.RepVoteDbUtil;
-
 import common.db.BaseDbUtils;
 import common.db.ExecuteWithReturnKey;
 import common.db.ExecuteWithReturnKey.ResultWithKey;
@@ -39,8 +39,8 @@ public class OneBillPageCrawler
 		b.crsHref = getUrlForText(driver, " CRS Summary");
 		b.indexTermsHref = getUrlForText(driver, "Subjects");
 		
-		System.out.println("crsHref=" + b.crsHref);
-		System.out.println("indexTermsHref=" + b.indexTermsHref);
+		logger.info("crsHref=" + b.crsHref);
+		logger.info("indexTermsHref=" + b.indexTermsHref);
 		
 		
 		// fetch the crs summary
@@ -59,6 +59,7 @@ public class OneBillPageCrawler
 		 * 
 		 * mapping between bill-id and crs-index-term-id -> bill_crs_index_term
 		 */
+		
 		save2Db(b);
 	}
 	
@@ -79,7 +80,7 @@ public class OneBillPageCrawler
 		  </div>
 		 */
 		b.crsSummary = getTextForDivId(driver, "content");
-		System.out.println("crsSummary=" + b.crsSummary);
+		logger.info("crsSummary=" + b.crsSummary);
 		
 		
 	}
@@ -96,7 +97,9 @@ public class OneBillPageCrawler
 		
 		// fetch the crs index terms
 		b.indexTerms = getCRSIndexTerms(driver);
-		System.out.println("indexTerms=" + b.indexTerms);
+		logger.info("indexTerms=" + b.indexTerms);
+		
+		b.updatePrimaryIndexTerm();
 		
 		
 	}
@@ -193,11 +196,20 @@ public class OneBillPageCrawler
 			
 			if (!ObjUtil.isEmpty(aList))
 			{
+				boolean first = true;
 				for (WebElement a : aList)
 				{
 					Link link = new Link();
 					link.url = a.getAttribute("href");
 					link.text = a.getText();
+					
+					// for index terms, the first link amongst the list of subjects seems to be the most important.
+					if (first)
+						link.importance = Importance.HIGH;				
+					else
+						link.importance = Importance.NORMAL;
+					
+					first = false;
 					result.add(link);
 				}
 			}
@@ -236,12 +248,15 @@ public class OneBillPageCrawler
     	 * added csv_crs_index_terms to bill
     	 * this simplifies loading solr 
     	 * the separator is a colon because data may have commas
+    	 * 
+    	 * 11/1/15: added primary_crs_index_term to bill
     	 */
     	
     	/*
-    	 update bill set crs_summary=?, crs_summary_url=?, index_terms_url=? , csv_crs_index_terms=? where id=?
+    	 update bill set crs_summary=?, crs_summary_url=?, index_terms_url=? , csv_crs_index_terms=? 
+    	 	, primary_crs_index_term=?,  crs_data_crawled=1, crs_data_crawl_date=now() where id=?
     	 */
-    	String sql = "update bill set crs_summary=?, crs_summary_url=?, index_terms_url=?, csv_crs_index_terms=? where id=? " ;
+    	String sql = "update bill set crs_summary=?, crs_summary_url=?, index_terms_url=?, csv_crs_index_terms=? , primary_crs_index_term=?,  crs_data_crawled=1, crs_data_crawl_date=now() where id=? " ;
     	
     	/*
     	 insert into vote_meta_small 
@@ -273,6 +288,9 @@ public class OneBillPageCrawler
     		BaseDbUtils.o.setString(pstmt, b.crsHref, i++);
     		BaseDbUtils.o.setString(pstmt, b.indexTermsHref, i++);
     		BaseDbUtils.o.setString(pstmt, b.getCsvIndexTerms(), i++);
+    		
+    		String primaryIndexTermStr = b.primaryIndexTerm != null? b.primaryIndexTerm.text : null;
+    		BaseDbUtils.o.setString(pstmt, primaryIndexTermStr, i++);
     		
     		pstmt.setInt(i++, b.id.intValue());
     		pstmt.executeUpdate();

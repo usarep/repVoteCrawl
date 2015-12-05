@@ -99,9 +99,19 @@ public class SenateCrsSummaryKeywordCrawler
 		 * select id, doc_type, name, url from bill where crs_data_crawled=0 and doc_type like 'S%'
 		 * 
 		 * select id, doc_type, name, url from bill where crs_data_crawled=0 and crs_summary is null and csv_crs_index_terms is null
+		 * 
+		 * 12/4/15: db has been updated, so simply this is fine:
+		 * select id, doc_type, name, url from bill where crs_data_crawled=0
+		 * 
 		 */
 		String sql = "select id, doc_type, name, url from bill where crs_data_crawled=0 and doc_type like 'S%' ";
 		sql = "select id, doc_type, name, url from bill where crs_data_crawled=0 and crs_summary is null and csv_crs_index_terms is null ";
+		sql = "select id, doc_type, name, url from bill where crs_data_crawled=0  ";
+		
+		// 12/4/15: crs_data_crawled== 5 was pre primary crs index term. also, some seem to have no crs terms even though the original page does
+		// maybe they resemble threads killed? 
+		// sql = "select id, doc_type, name, url from bill where crs_data_crawled=5  ";
+		
 		PreparedStatement pstmt = null;
 		ResultSet rs = null;
 		try

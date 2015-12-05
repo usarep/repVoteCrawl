@@ -33,6 +33,13 @@ public class HouseBillsPageCrawler
 	public static HouseBillsPageCrawler o = new HouseBillsPageCrawler();
 	protected HouseBillsPageCrawler() {}
 	
+	/*
+     * whether or not to crawl indiv bills. if set to true, crawl.
+     * on the other hand, since bills repeat across roll calls, more efficient to
+     * crawl them as a separate step by pulling them out of db. 
+     */
+	private static final boolean CRAWL_INDIV_BILLS = false;
+	
     public static void main(String[] args) 
     {
     	
@@ -40,7 +47,18 @@ public class HouseBillsPageCrawler
     	{
     		Arguments arguments = Arguments.newInstance(args);
     		
-    		o.execute(arguments.url, arguments.year, arguments.startRollCallNum);
+    		// The Firefox driver supports javascript 
+	        WebDriver driver = new FirefoxDriver();
+	       
+	        // select one of the two actions below.
+	        // currently using comments. add an arg flag to select TODO
+	        
+	        o.crawlForYear(driver, arguments.year);
+    		
+    		// o.crawlRollCallsPage(driver, arguments.url, arguments.year, arguments.startRollCallNum);
+    		
+    		
+    		driver.quit();
     		
         
     	} catch (Exception e) {
@@ -49,7 +67,27 @@ public class HouseBillsPageCrawler
     	}
     }
     
-    public void execute (String url, int year, int startRollCallNum)
+    /*
+     * crawl all pages for a given year
+     */
+    
+    public void crawlForYear(WebDriver driver, int year)
+    {
+    	 
+        List<String> pages2Crawl =  o.genPageList(driver, year);
+        
+        logger.info(pages2Crawl);
+        
+        for (String url: pages2Crawl)
+        {
+        	logger.info("start " + url);
+        	crawlRollCallsPage(driver, url, year, 0);
+        	
+        	logger.info("end " + url);
+        }
+	      
+    }
+    public void crawlRollCallsPage (WebDriver driver, String url, int year, int startRollCallNum)
     {
     	try
     	{
@@ -73,12 +111,8 @@ public class HouseBillsPageCrawler
 	    	
 	    	params.startRollCallNum = startRollCallNum;
 	    	
-	        // The Firefox driver supports javascript 
-	        WebDriver driver = new FirefoxDriver();
+	    	crawlRollCallsPage(driver, params);
 	        
-	        o.execute(driver, params);
-	        
-	        driver.quit();
         
     	} catch (Exception e) {
     		logger.error(e.getMessage(), e);
@@ -98,7 +132,64 @@ public class HouseBillsPageCrawler
     	int startRollCallNum; // if > 0, start with this as the min roll call number; earlier values have been processed
     }
     
-    public void execute(WebDriver driver, Params params) throws Exception 
+    /*
+     * generate a list of pages to crawl to get meta data on the bills that
+     * came up for roll call. each link is of the form
+     * 
+     * http://clerk.house.gov/evs/2008/ROLL_000.asp
+     */
+    public List<String> genPageList(WebDriver driver, int year)
+    {
+    	List<String> result = new ArrayList<String>();
+    	
+    	// links to capture http://clerk.house.gov/evs/+ year + /ROLL_\d+.asp
+    	/*
+    	 * top level page (index page) link: http://clerk.house.gov/evs/2008/index.asp
+    	 * 
+    	 * http://clerk.house.gov/evs/+ year + /index.asp
+    	 */
+    	
+    	// e.g., http://clerk.house.gov/evs/2008/index.asp
+    	String indexPageUrl = "http://clerk.house.gov/evs/" + year + "/index.asp" ;
+    	driver.get(indexPageUrl);
+    	
+    	/*
+    	 * slow: // WebDriverUtil.findElements(driver, By.xpath("//A" ) ); 
+    	 * this may be faster: By.cssSelector("a[href*='long']")
+    	 * 
+    	 * http://clerk.house.gov/evs/2008/ROLL_000.asp
+    	 */
+    	
+    	// the link, as written on the html page is relative to current page, ie ROLL_500.asp
+    	// css selector will use this text
+    	String patternStr = "a[href^=\"ROLL_\"]";
+    	
+    	// the A selector will getAttribute("href") will return the absolute url
+    	String patternStrFull = "http://clerk.house.gov/evs/" + year + "/ROLL_\\d+.asp";
+    	
+    	List<WebElement> allLinks = WebDriverUtil.findElements(driver, By.cssSelector(patternStr ) );
+    	
+    	if (ObjUtil.isEmpty(allLinks))
+    		return result;
+    	
+    	
+    	for (WebElement link : allLinks)
+    	{
+    		String href = link.getAttribute("href");
+    		
+    		// check with the full pattern, including the number
+    		// see if href matches http://clerk.house.gov/evs/+ year + /ROLL_\d+.asp
+    		if ( href.matches(patternStrFull))
+    		{
+    			result.add(href);
+    		}
+    		
+    	}
+    	
+    	return result;
+    }
+    
+    public void crawlRollCallsPage(WebDriver driver, Params params) throws Exception 
     {
         
         // Go to the top level page
@@ -197,7 +288,13 @@ public class HouseBillsPageCrawler
         
         save2Db(billRollCalls);
         
-        crawl(driver, billRollCalls);
+        /*
+         * whether or not to crawl indiv bills. if set to true, crawl.
+         * on the other hand, since bills repeat across roll calls, more efficient to
+         * crawl them as a separate step by pulling them out of db. 
+         */
+        if (CRAWL_INDIV_BILLS)
+        	crawl(driver, billRollCalls);
         
 
         
@@ -219,9 +316,12 @@ public class HouseBillsPageCrawler
     	 
     	 insert into bill (doc_type, doc_number, name, url, doc_title) values (?,?,?,?,?)
     	 on duplicate key update id = last_insert_id(id), name=values(name), doc_title=values(doc_title);
+    	 
+    	 12/4/15: add crs_data_crawled to the list of fields saved. set it to 2 for urls matching EMPTY. if there is alreay a value
+    	 for it, let it stay
     	 */
-    	String sql = "insert into bill (doc_type, doc_number, name, url, doc_title) values (?,?,?,?,?) "
-    	 + " on duplicate key update id = last_insert_id(id), name=values(name), doc_title=values(doc_title); ";
+    	String sql = "insert into bill (doc_type, doc_number, name, url, doc_title, crs_data_crawled) values (?,?,?,?,?,?) "
+    	 + " on duplicate key update id = last_insert_id(id), name=values(name), doc_title=values(doc_title) ; ";
     	
     	/*
     	 insert into vote_meta_small 
@@ -233,7 +333,7 @@ public class HouseBillsPageCrawler
     	String sqlVoteMetaSmall = "insert into vote_meta_small "
     	 	 + " (bill_id, roll_call_num, congress, year, session, chamber_id, chamber) "
     	 	 + " values (?,?,?,?,?,?,?) "
-    	 	 + " on duplicate key update id=last_insert_id(id); ";
+    	 	 + " on duplicate key update id=last_insert_id(id), bill_id=values(bill_id); ";
     	
     	int numSaved = 0;
     	try
@@ -255,19 +355,43 @@ public class HouseBillsPageCrawler
     			String docType = e.getDocType();
     			
     			/*
-    			 * (docNumber, docType) are unique key, if they are null, we cannot use this record
+    			 * (docNumber, docType) is a unique key if both are non null.
+    			 * for docType == JOURNAL or ADJOURN or QUORUM, there is no docNumber. 
+    			 * For these, just enter docType. if one field of the key is null, multiple ADJOURNs etc 
+    			 * will not violate the unique key constraint.
     			 */
     			if (docNumber == null || StrUtil.isEmpty(docType))
     			{
-    				logger.error("docNumber=" + docNumber + ", docType=" + docType + ", should be non empty. skipping");
-    				continue;
+    				logger.info("docNumber=" + docNumber + ", docType=" + docType + ", this is ok.  saving as is.");
+    				// continue;
+    				
+    				/*
+    				 * kludge. 
+    				 * if we rerun the crawler, it will generate new records for the bill.
+    				 * we don't really want that. in fact, this is not a bill anyway,
+    				 * it's just an id that corresponds to the roll call. 
+    				 * if two "ADJOURN" records have the same docNumber, it doesn't hurt.
+    				 * so we are using rollCallNum for docNumber.
+    				 * if (docNumber,docType) collides for this case, it's ok.
+    				 */
+    				if (docNumber == null)
+    					docNumber = new Integer(e.rollCallNum);
+    				
+    				if (docType == null)
+    					docType = "NONE";
     				
     			}
     			pstmt.setString(i++, docType);
-    			pstmt.setInt(i++, docNumber);
+    			BaseDbUtils.o.setInt(pstmt, docNumber, i++);
     			BaseDbUtils.o.setString(pstmt, e.billUrlText, i++);
     			pstmt.setString(i++, e.billUrl);
     			BaseDbUtils.o.setString(pstmt, e.docTitle, i++);
+    			
+    			int crsDataCrawled = 0;
+    			if (StrUtil.isEmpty(e.billUrl) || e.billUrl.contains("_EMPTY"))
+    				crsDataCrawled=2;
+    			
+    			pstmt.setInt(i++, crsDataCrawled);
     			
     			ResultWithKey wrappedId = ExecuteWithReturnKey.o.executeUpdate(pstmt);
     			if (wrappedId != null && wrappedId.getGeneratedKey() != null)
@@ -286,7 +410,7 @@ public class HouseBillsPageCrawler
     				pstmt2.setString(k++, e.params.session);
     				
     				
-    				pstmt.setInt(i++, e.params.chamberId);
+    				pstmt2.setInt(k++, e.params.chamberId);
     				
     				pstmt2.setString(k++, e.params.chamber);
     				pstmt2.executeUpdate();
@@ -297,6 +421,7 @@ public class HouseBillsPageCrawler
     		
     	} catch (SQLException e) {
     		BaseDbUtils.o.rollback(con);
+    		logger.error(e.getMessage(), e);
     		numSaved = -1;
     	} finally {
     		BaseDbUtils.o.close(pstmt2);
